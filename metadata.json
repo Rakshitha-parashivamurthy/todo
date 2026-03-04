@@ -1,0 +1,5 @@
+{
+  "name": "ToDoS",
+  "description": "ToDoS - An offline-first, high-performance productivity application designed for focus and clarity. Featuring smart task management, Pomodoro timer, and deep insights.",
+  "requestFramePermissions": []
+}

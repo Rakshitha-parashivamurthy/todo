@@ -35,7 +35,7 @@ const transporter = nodemailer.createTransport({
     pass: process.env.EMAIL_PASS,
   },
   tls: {
-    rejectUnauthorized: false, // 🔥 THIS FIXES YOUR ERROR
+    rejectUnauthorized: false,
   },
 });
 

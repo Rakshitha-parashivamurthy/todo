@@ -62,10 +62,8 @@ app.post("/api/users/invite", async (req, res) => {
     });
 
     // ✅ Create invite link
-    const frontendUrl =
-      process.env.FRONTEND_URL || "http://localhost:3000";
-
-    const inviteLink = `${frontendUrl}/magic-login?token=${token}`;
+    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+const inviteLink = `${frontendUrl}/magic-login?token=${token}`;
 
     // ✅ Send Email via Resend
     try {

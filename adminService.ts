@@ -1,7 +1,7 @@
 import { auth, db } from "./firebase";
 import { doc, deleteDoc } from "firebase/firestore";
 
-const API_URL = "http://localhost:5000/api";
+import { API_URL } from "./apiConfig";
 
 export interface InviteResponse {
   success: boolean;

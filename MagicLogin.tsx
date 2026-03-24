@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import { signInWithCustomToken } from "firebase/auth";
 import { auth } from "./firebase";
 import { Eye, EyeOff, Lock, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { API_URL } from "./apiConfig";
 
 const MagicLogin: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -27,7 +28,7 @@ const MagicLogin: React.FC = () => {
 
     const verifyToken = async () => {
       try {
-        const response = await fetch("http://localhost:5000/api/users/verify-invite", {
+        const response = await fetch(`${API_URL}/users/verify-invite`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ token }),
@@ -68,7 +69,7 @@ const MagicLogin: React.FC = () => {
     setStatus("submitting");
 
     try {
-      const response = await fetch("http://localhost:5000/api/users/complete-invite", {
+      const response = await fetch(`${API_URL}/users/complete-invite`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token, password }),

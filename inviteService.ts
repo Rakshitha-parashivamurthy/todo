@@ -1,11 +1,6 @@
 import { auth } from './firebase';
 
-// ✅ AUTO SWITCH (LOCAL vs PRODUCTION)
-const API_URL =
-  window.location.hostname === "localhost"
-    ? "http://localhost:5000/api"
-    : "https://your-backend-url.com/api"; // 🔴 replace with your deployed backend
-
+import { API_URL } from './apiConfig';
 export interface Invite {
   inviteId: string;
   companyId: string;

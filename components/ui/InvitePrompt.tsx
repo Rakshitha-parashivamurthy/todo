@@ -15,7 +15,7 @@ interface InvitePromptProps {
   onInviteAccepted?: () => void;
 }
 
-const API_URL = "http://localhost:5000/api";
+import { API_URL } from '../../apiConfig';
 
 const InvitePrompt = ({ email, onInviteAccepted }: InvitePromptProps) => {
   const [invites, setInvites] = useState<Invite[]>([]);

@@ -1,7 +1,9 @@
 const express = require("express");
 const cors = require("cors");
 const admin = require("firebase-admin");
-const nodemailer = require("nodemailer");
+import { Resend } from "resend";
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 require("dotenv").config({ path: require('path').resolve(__dirname, '../.env') });
 
 const { db: clientDb } = require("./firebase");
@@ -251,10 +253,10 @@ app.post("/api/users/invite", async (req, res) => {
     // ✅ Send Email
     if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
       try {
-        await transporter.sendMail({
-          from: `"ToDoS App" <${process.env.EMAIL_USER}>`,
-          to: email,
-          subject: "You're invited to ToDoS 🚀",
+        await resend.emails.send({
+  from: "onboarding@resend.dev",
+  to: email,
+  subject: "You've been invited!",
           html: `
             <div style="font-family: sans-serif; padding: 20px;">
               <h2 style="color: #6366f1;">Welcome to ToDoS!</h2>

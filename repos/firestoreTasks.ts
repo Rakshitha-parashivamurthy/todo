@@ -14,7 +14,7 @@ import { auth } from "../firebase";
 
 // Add Task
 
-export const addTaskToFirestore = async (task: any) => {
+export const addTaskToFirestore = async (task: any, companyId: string) => {
   if (!auth.currentUser) {
     console.error("❌ No user logged in");
     return;
@@ -24,6 +24,8 @@ export const addTaskToFirestore = async (task: any) => {
     await setDoc(doc(db, "tasks", task.id), {
       ...task,
       userId: auth.currentUser.uid,
+      companyId,
+      createdByUserId: auth.currentUser.uid,
       createdAt: task.createdAt
         ? new Date(task.createdAt)
         : new Date(),
@@ -38,12 +40,14 @@ export const addTaskToFirestore = async (task: any) => {
 // Listen to User Tasks
 export const listenToUserTasks = (
   userId: string,
+  companyId: string,
   callback: (tasks: any[]) => void
 ) => {
   console.log("🔍 Setting up Firestore listener for user tasks:", userId);
   const q = query(
     collection(db, "tasks"),
-    where("userId", "==", userId)   // ✅ MUST be string UID
+    where("userId", "==", userId),   // ✅ MUST be string UID
+    where("companyId", "==", companyId)
   );
 
   return onSnapshot(q, (snapshot) => {

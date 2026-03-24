@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { Task, Tag, Priority, View, AppState, SubTask, FocusState, Recurrence } from './types';
+import { Task, Tag, Priority, View, AppState, SubTask, FocusState, Recurrence, Role } from './types';
 import { format, addDays, addWeeks, addMonths } from 'date-fns';
 import { breakdownTask } from './lib/openrouter';
 import { auth } from './firebase';
@@ -55,6 +55,19 @@ interface ToDoSStore extends AppState {
   toggleFocusTimer: () => void;
   resetFocusTimer: () => void;
   tickFocusTimer: () => void;
+
+  companyId: string | null;
+  role: Role | null;
+  status: 'pending' | 'active' | 'inactive' | null;
+  companyStatus: 'pending' | 'pending_approval' | 'active' | null;
+  subscriptionStatus: 'pending_approval' | 'active' | 'expired' | null;
+  setAuthData: (
+    companyId: string | null, 
+    role: Role | null, 
+    status: 'pending' | 'active' | 'inactive' | null,
+    companyStatus?: 'pending' | 'pending_approval' | 'active' | null,
+    subscriptionStatus?: 'pending_approval' | 'active' | 'expired' | null
+  ) => void;
 }
 
 const DEFAULT_TAGS: Tag[] = [
@@ -189,15 +202,15 @@ export const setupSettingsListener = (userId: string) => {
   });
 };
 
-export const setupDailyTargetsListener = (userId: string) => {
-  return listenToDailyTargets(userId, (targets) => {
+export const setupDailyTargetsListener = (userId: string, companyId: string) => {
+  return listenToDailyTargets(userId, companyId, (targets) => {
     // You can use this data to display daily target information
     console.log('📊 Daily targets updated:', targets);
   });
 };
 
-export const setupTaskHistoryListener = (userId: string) => {
-  return listenToTaskHistory(userId, (entries) => {
+export const setupTaskHistoryListener = (userId: string, companyId: string) => {
+  return listenToTaskHistory(userId, companyId, (entries) => {
     // You can use this data to display task history
     console.log('📜 Task history updated:', entries);
   });
@@ -217,6 +230,14 @@ export const useStore = create<ToDoSStore>()(
       searchQuery: '',
       filterTagId: null,
       focusState: DEFAULT_FOCUS_STATE,
+      companyId: null,
+      role: null,
+      status: null,
+      companyStatus: null,
+      subscriptionStatus: null,
+
+      setAuthData: (companyId, role, status, companyStatus = null, subscriptionStatus = null) => 
+        set({ companyId, role, status, companyStatus, subscriptionStatus }),
 
       setSearchQuery: (searchQuery) => set({ searchQuery }),
       setFilterTagId: (filterTagId) => set({ filterTagId }),
@@ -267,7 +288,12 @@ export const useStore = create<ToDoSStore>()(
         // optimistic update
         set((state) => ({ tasks: [newTask, ...state.tasks] }));
         // persist to firestore
-        addTaskToFirestore(newTask).catch(err => logError('addTaskToFirestore', err, { task: newTask }));
+        const companyId = useStore.getState().companyId;
+        if (companyId) {
+          addTaskToFirestore(newTask, companyId).catch(err => logError('addTaskToFirestore', err, { task: newTask }));
+        } else {
+          console.error("No company ID available for adding task.");
+        }
       },
 
       updateTask: (id, updates) => {
@@ -349,7 +375,10 @@ export const useStore = create<ToDoSStore>()(
             }).catch(err => logError('updateTaskInFirestore', err, { id, completed: isNowCompleted }));
             // Write next task to Firestore (listener will fetch it)
             if (nextTask) {
-              addTaskToFirestore(nextTask).catch(err => logError('addTaskToFirestore', err, { task: nextTask }));
+              const companyId = useStore.getState().companyId;
+              if (companyId) {
+                addTaskToFirestore(nextTask, companyId).catch(err => logError('addTaskToFirestore', err, { task: nextTask }));
+              }
             }
           } else {
             updateTaskInFirestore(id, { completed: false, completedAt: null }).catch(err => logError('updateTaskInFirestore', err, { id, completed: false }));
@@ -441,7 +470,10 @@ export const useStore = create<ToDoSStore>()(
           tags: [...state.tags, newTag]
         }));
         console.log("📤 Calling addTagToFirestore with:", newTag);
-        addTagToFirestore(newTag).catch(err => logError('addTagToFirestore', err, { tag: newTag }));
+        const companyId = useStore.getState().companyId;
+        if (companyId) {
+          addTagToFirestore(newTag, companyId).catch(err => logError('addTagToFirestore', err, { tag: newTag }));
+        }
       },
 
       updateTag: (id, name, color) => {
@@ -508,7 +540,10 @@ export const useStore = create<ToDoSStore>()(
         accentColor: '#6366f1',
         searchQuery: '',
         filterTagId: null,
-        focusState: DEFAULT_FOCUS_STATE
+        focusState: DEFAULT_FOCUS_STATE,
+        // Authentication data shouldn't be fully wiped but resetData is usually for full purge.
+        // We leave them as is, or reset if fully logging out.
+        // companyId, role, status stay the same to not break access until logout.
       }),
 
       importData: (data) => set((state) => ({

@@ -25,7 +25,7 @@ export const addTaskExample = async (taskData: any) => {
 
   try {
     // Your existing code...
-    const response = await addTaskToFirestore(taskData);
+    const response = await addTaskToFirestore(taskData, 'mock-company-id');
     
     const duration = performance.now() - startTime;
     logPerformance('addTaskToFirestore', duration, true);

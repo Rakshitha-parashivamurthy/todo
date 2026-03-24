@@ -1,29 +1,18 @@
-import { doc, setDoc, updateDoc, getDoc, collection, getDocs, query, where } from "firebase/firestore";
-import { db } from "../firebase";
+const { doc, setDoc, updateDoc, getDoc, collection, getDocs, query, where } = require("firebase/firestore");
+const { db } = require("../firebase");
 
-type Role = 'super_admin' | 'admin' | 'user';
-
-export const addUserToFirestore = async (user: { 
-  uid: string; 
-  email?: string | null;
-  username?: string;
-  password_hash?: string;
-  role?: Role;
-  companyId?: string;
-}) => {
+const addUserToFirestore = async (user) => {
   const userRef = doc(db, "users", user.uid);
   try {
     const hasSA = await hasSuperAdmin();
-    const role = !hasSA ? 'super_admin' : (user.role || 'user');
-    const status = !hasSA ? 'active' : 'pending';
-
+    const role = user.role || (!hasSA ? 'super_admin' : 'user');
     await setDoc(userRef, {
       email: user.email || null,
       username: user.username || user.email?.split('@')[0] || 'user',
       password_hash: user.password_hash || null,
       role,
       companyId: user.companyId || null,
-      status,
+      status: 'pending',
       created_at: new Date(),
       last_login: new Date(),
     });
@@ -33,11 +22,9 @@ export const addUserToFirestore = async (user: {
   }
 };
 
-// Update last login timestamp
-export const updateUserLastLogin = async (uid: string) => {
+const updateUserLastLogin = async (uid) => {
   const userRef = doc(db, "users", uid);
   try {
-    // use setDoc with merge so that if doc is missing it will be created
     await setDoc(userRef, {
       last_login: new Date(),
     }, { merge: true });
@@ -47,8 +34,7 @@ export const updateUserLastLogin = async (uid: string) => {
   }
 };
 
-// Get user by UID
-export const getUserByUid = async (uid: string) => {
+const getUserByUid = async (uid) => {
   const userRef = doc(db, "users", uid);
   try {
     const docSnap = await getDoc(userRef);
@@ -64,8 +50,7 @@ export const getUserByUid = async (uid: string) => {
   }
 };
 
-// Update user role
-export const updateUserRole = async (uid: string, role: 'super_admin' | 'admin' | 'user') => {
+const updateUserRole = async (uid, role) => {
   const userRef = doc(db, "users", uid);
   try {
     await updateDoc(userRef, { role });
@@ -75,8 +60,7 @@ export const updateUserRole = async (uid: string, role: 'super_admin' | 'admin' 
   }
 };
 
-// Update user company
-export const updateUserCompany = async (uid: string, companyId: string) => {
+const updateUserCompany = async (uid, companyId) => {
   const userRef = doc(db, "users", uid);
   try {
     await updateDoc(userRef, { companyId });
@@ -86,8 +70,7 @@ export const updateUserCompany = async (uid: string, companyId: string) => {
   }
 };
 
-// Update user status
-export const updateUserStatus = async (uid: string, status: 'pending' | 'active' | 'inactive') => {
+const updateUserStatus = async (uid, status) => {
   const userRef = doc(db, "users", uid);
   try {
     await updateDoc(userRef, { status });
@@ -97,8 +80,7 @@ export const updateUserStatus = async (uid: string, status: 'pending' | 'active'
   }
 };
 
-// Check if super admin exists
-export const hasSuperAdmin = async () => {
+const hasSuperAdmin = async () => {
   const q = query(collection(db, "users"), where("role", "==", "super_admin"));
   try {
     const querySnapshot = await getDocs(q);
@@ -108,3 +90,5 @@ export const hasSuperAdmin = async () => {
     return false;
   }
 };
+
+module.exports = { addUserToFirestore, updateUserLastLogin, getUserByUid, updateUserRole, updateUserCompany, updateUserStatus, hasSuperAdmin };

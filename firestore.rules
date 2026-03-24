@@ -1,0 +1,96 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSuperAdmin(userId) {
+      return request.auth != null && 
+             get(/databases/$(database)/documents/users/$(userId)).data.role == 'super_admin';
+    }
+
+    function getUserCompanyId(userId) {
+      return request.auth != null && get(/databases/$(database)/documents/users/$(userId)).data.company_id;
+    }
+
+    function isAdmin(userId) {
+      return request.auth != null && 
+             get(/databases/$(database)/documents/users/$(userId)).data.role == 'admin';
+    }
+
+    // USERS COLLECTION
+    match /users/{userId} {
+      allow read, write: if request.auth.uid == userId;
+      allow read: if isSuperAdmin(request.auth.uid);
+      allow read: if isAdmin(request.auth.uid) && 
+                    request.auth.uid != userId &&
+                    getUserCompanyId(request.auth.uid) == getUserCompanyId(userId);
+    }
+
+    // COMPANIES COLLECTION
+    match /companies/{companyId} {
+      allow read, write: if isSuperAdmin(request.auth.uid);
+      allow read: if isAdmin(request.auth.uid) && 
+                   getUserCompanyId(request.auth.uid) == companyId;
+      allow create: if request.auth != null;
+    }
+
+    // SUBSCRIPTIONS COLLECTION
+    match /subscriptions/{subscriptionId} {
+      allow read, write: if isSuperAdmin(request.auth.uid);
+      allow read: if isAdmin(request.auth.uid) && 
+                   getUserCompanyId(request.auth.uid) == resource.data.company_id;
+    }
+
+    // TASKS COLLECTION
+    match /tasks/{taskId} {
+      allow read, write: if isSuperAdmin(request.auth.uid);
+      allow read, write: if request.auth != null && 
+                          getUserCompanyId(request.auth.uid) == resource.data.company_id &&
+                          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'active';
+      allow create: if request.auth != null && 
+                     request.resource.data.company_id == getUserCompanyId(request.auth.uid) &&
+                     get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'active';
+    }
+
+    // TAGS COLLECTION
+    match /tags/{tagId} {
+      allow read, write: if isSuperAdmin(request.auth.uid);
+      allow read, write: if request.auth != null && 
+                          getUserCompanyId(request.auth.uid) == resource.data.company_id &&
+                          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'active';
+      allow create: if request.auth != null && 
+                     request.resource.data.company_id == getUserCompanyId(request.auth.uid) &&
+                     get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'active';
+    }
+
+    // DAILY_TARGETS COLLECTION
+    match /daily_targets/{targetId} {
+      allow read, write: if isSuperAdmin(request.auth.uid);
+      allow read, write: if request.auth != null && 
+                          getUserCompanyId(request.auth.uid) == resource.data.company_id &&
+                          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'active';
+      allow create: if request.auth != null && 
+                     request.resource.data.company_id == getUserCompanyId(request.auth.uid) &&
+                     get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'active';
+    }
+
+    // TASK_HISTORY COLLECTION  
+    match /task_history/{historyId} {
+      allow read, write: if isSuperAdmin(request.auth.uid);
+      allow read: if request.auth != null && 
+                   getUserCompanyId(request.auth.uid) == resource.data.company_id &&
+                   get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'active';
+      allow create: if request.auth != null && 
+                     request.resource.data.company_id == getUserCompanyId(request.auth.uid) &&
+                     get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'active';
+    }
+
+    // PENDING_APPROVAL COLLECTION
+    match /pending_approval/{docId} {
+      allow read, write: if isSuperAdmin(request.auth.uid);
+    }
+
+    // Allow all operations (for development - tighten in production)
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

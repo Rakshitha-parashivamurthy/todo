@@ -12,11 +12,12 @@ import { isToday, isFuture, isValid } from 'date-fns';
 import { isOverdue } from '../../backend/utils/dateUtils';
 
 interface SidebarProps {
+  userData?: any;
   onNavigate?: () => void;
   onAddTagRequest?: () => void; // New prop
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ onNavigate, onAddTagRequest }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ userData, onNavigate, onAddTagRequest }) => {
   const { activeView, setView, tasks, tags, filterTagId, setFilterTagId } = useStore(); // removed addTag
 
   // ... (keep rest)
@@ -48,6 +49,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ onNavigate, onAddTagRequest })
 const tools = [
   { id: 'focus', label: 'Focus Mode', icon: Target },
   { id: 'insights', label: 'Insights', icon: BarChart3 },
+  ...(userData?.role === 'admin' ? [{ id: 'subscription', label: 'Subscription', icon: LayoutDashboard }] : []),
+  ...(userData?.role === 'admin' ? [{ id: 'manage_users', label: 'Manage Users', icon: LayoutDashboard }] : []),
+  ...(userData?.role === 'super_admin' ? [{ id: 'super_admin', label: 'Admin Dashboard', icon: LayoutDashboard }] : []),
   { id: 'settings', label: 'Settings', icon: Settings },
 ];
 

@@ -13,7 +13,7 @@ import { db } from "../firebase";
 import { auth } from "../firebase";
 
 // Add Tag
-export const addTagToFirestore = async (tag: any) => {
+export const addTagToFirestore = async (tag: any, companyId: string) => {
   if (!auth.currentUser) {
     console.error("❌ No user logged in");
     return;
@@ -23,6 +23,7 @@ export const addTagToFirestore = async (tag: any) => {
     await setDoc(doc(db, "tags", tag.id), {
       ...tag,
       userId: auth.currentUser.uid,
+      companyId,
       createdAt: tag.createdAt ? new Date(tag.createdAt) : new Date(),
     });
 
@@ -35,12 +36,14 @@ export const addTagToFirestore = async (tag: any) => {
 // Listen to User Tags
 export const listenToUserTags = (
   userId: string,
+  companyId: string,
   callback: (tags: any[]) => void
 ) => {
   console.log("🔍 Setting up Firestore listener for user tags:", userId);
   const q = query(
     collection(db, "tags"),
-    where("userId", "==", userId)
+    where("userId", "==", userId),
+    where("companyId", "==", companyId)
   );
 
   return onSnapshot(

@@ -1,4 +1,5 @@
 import Login from "./Login.tsx";
+import ForgotPassword from "./ForgotPassword";
 import { signOut } from "firebase/auth";
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { AnimatePresence, motion, Reorder } from 'framer-motion';
@@ -18,7 +19,9 @@ import { View, Priority, Task, Recurrence } from './types';
 import { isToday, isFuture, format, isValid } from 'date-fns';
 import { listenToUserTasks } from "./repos/firestoreTasks";
 import { listenToUserTags } from "./repos/firestoreTags";
-import { updateUserLastLogin } from "./repos/firestoreUsers";
+import { updateUserLastLogin, getUserByUid } from "./repos/firestoreUsers";
+import { getCompanyById } from "./companyService";
+import { getSubscriptionById } from "./repos/firestoreSubscriptions";
 import { isOverdue } from './backend/utils/dateUtils.ts';
 import {
   Search, Bell, Moon, Sun, CheckCircle2, Menu, ListChecks,
@@ -27,9 +30,14 @@ import {
   Calendar, Flag, Check, LayoutList, Repeat, CircleHelp
 } from 'lucide-react';
 import Register from "./Register";
+import MagicLogin from "./MagicLogin";
+import Subscription from "./Subscription";
+import SuperAdminDashboard from "./SuperAdminDashboard";
+import ManageUsers from "./components/features/ManageUsers";
+import InvitePrompt from "./components/ui/InvitePrompt";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { auth } from "./firebase";
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 
 // Sound utility with lazy singleton AudioContext (created only on user gesture)
 let audioCtx: AudioContext | null = null;
@@ -87,17 +95,69 @@ const playSound = (freq = 440, type: OscillatorType = 'sine', duration = 0.2, vo
 };
 
 const App: React.FC = () => {
+  const location = useLocation();
 
-  // 🔐 AUTH STATE
+  // 🔐 HARDCODED SUPER ADMIN
+  const HARDCODED_SUPERADMIN_EMAIL = 'superadmin@todo.app';
+
   const [user, setUser] = useState<User | null>(null);
+  const [userData, setUserData] = useState<any>(null);
+  const [companyData, setCompanyData] = useState<any>(null);
+  const [subscriptionData, setSubscriptionData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
+  // Note: MagicLogin route interceptor is down below all hooks to prevent Rules of Hooks violations
+
+
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
-      // Update last login when user authenticates
+      // Update last login and fetch user data when user authenticates
       if (currentUser) {
         updateUserLastLogin(currentUser.uid).catch(console.error);
+        let data = await getUserByUid(currentUser.uid);
+        
+        // Check if this is the hardcoded super admin email
+        if (currentUser.email === HARDCODED_SUPERADMIN_EMAIL) {
+          // Ensure hardcoded super admin has correct role and status
+          if (!data || data.role !== 'super_admin' || data.status !== 'active') {
+            const { updateUserRole, updateUserStatus } = await import('./repos/firestoreUsers');
+            await updateUserRole(currentUser.uid, 'super_admin');
+            await updateUserStatus(currentUser.uid, 'active');
+            // Refresh user data after update
+            data = await getUserByUid(currentUser.uid);
+            console.log('✅ Superadmin credentials applied');
+          }
+        }
+        
+        setUserData(data);
+        
+        let cData = null;
+        let subData = null;
+
+        if (data?.companyId) {
+          cData = await getCompanyById(data.companyId);
+          setCompanyData(cData);
+
+          if (cData?.subscriptionId) {
+            subData = await getSubscriptionById(cData.subscriptionId);
+            setSubscriptionData(subData);
+          } else {
+            setSubscriptionData(null);
+          }
+        } else {
+          setCompanyData(null);
+          setSubscriptionData(null);
+        }
+
+        if (data) {
+          useStore.getState().setAuthData(data.companyId || null, data.role || null, data.status || null, cData?.status || null, subData?.status || null);
+        }
+      } else {
+        setUserData(null);
+        setCompanyData(null);
+        setSubscriptionData(null);
+        useStore.getState().setAuthData(null, null, null, null, null);
       }
       setLoading(false);
     });
@@ -128,25 +188,25 @@ const App: React.FC = () => {
 
   // 🔥 FIRESTORE SYNC
   useEffect(() => {
-    if (!user) return;
+    if (!user || !userData?.companyId) return;
 
-    const unsubscribe = listenToUserTasks(user.uid, (tasks) => {
+    const unsubscribe = listenToUserTasks(user.uid, userData.companyId, (tasks) => {
       useStore.getState().setTasks(tasks);
     });
 
     return () => unsubscribe();
-  }, [user]);
+  }, [user, userData]);
 
   // 🏷️ TAGS SYNC
   useEffect(() => {
-    if (!user) return;
+    if (!user || !userData?.companyId) return;
 
-    const unsubscribeTags = listenToUserTags(user.uid, (tags) => {
+    const unsubscribeTags = listenToUserTags(user.uid, userData.companyId, (tags) => {
       useStore.getState().setTags(tags);
     });
 
     return () => unsubscribeTags();
-  }, [user]);
+  }, [user, userData]);
 
   // ⚙️ SETTINGS SYNC
   useEffect(() => {
@@ -158,19 +218,19 @@ const App: React.FC = () => {
 
   // 🎯 DAILY TARGETS SYNC
   useEffect(() => {
-    if (!user) return;
+    if (!user || !userData?.companyId) return;
 
-    const unsubscribeTargets = setupDailyTargetsListener(user.uid);
+    const unsubscribeTargets = setupDailyTargetsListener(user.uid, userData.companyId);
     return () => unsubscribeTargets?.();
-  }, [user]);
+  }, [user, userData]);
 
   // 📝 TASK HISTORY SYNC
   useEffect(() => {
-    if (!user) return;
+    if (!user || !userData?.companyId) return;
 
-    const unsubscribeHistory = setupTaskHistoryListener(user.uid);
+    const unsubscribeHistory = setupTaskHistoryListener(user.uid, userData.companyId);
     return () => unsubscribeHistory?.();
-  }, [user]);
+  }, [user, userData]);
 
 
   // 🧠 your Zustand store
@@ -529,9 +589,26 @@ const App: React.FC = () => {
   }, [filterTagId, tags]);
 
   const renderContent = () => {
+    // 🔐 ROLE-BASED ACCESS CONTROL
+    
+    // Only SUPER admin can access super_admin view
+    if (activeView === 'super_admin') {
+      if (userData?.role === 'super_admin') {
+        return <SuperAdminDashboard />;
+      } else {
+        // Redirect non-super-admins to default view
+        setView('inbox');
+        return null;
+      }
+    }
+
+    // Super admin can access everything now
+
     if (activeView === 'focus') return <FocusMode />;
     if (activeView === 'insights') return <Insights />;
     if (activeView === 'help') return <HelpView />;
+    if (activeView === 'subscription') return <Subscription />;
+    if (activeView === 'manage_users') return <ManageUsers companyId={userData?.companyId} />;
     if (activeView === 'settings') return (
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-8 max-w-2xl mx-auto dark:text-neutral-200 pb-32">
         <header className="mb-10">
@@ -860,15 +937,100 @@ const App: React.FC = () => {
   };
   if (loading) return <div>Loading...</div>;
 
+  // Bypass everything for the magic login route safely post-hooks 
+  if (location.pathname === '/magic-login') {
+    return <MagicLogin />;
+  }
+
   if (!user) {
     return (
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     );
   }
+
+  const isSuperAdmin = userData?.role === 'super_admin';
+  const isFullyActive = 
+    userData?.status === 'active' && 
+    companyData?.status === 'active' && 
+    (subscriptionData?.status === 'active' || !companyData?.subscriptionId);
+
+  if (!isSuperAdmin && !isFullyActive) {
+    if (userData?.role === 'admin' && userData?.status === 'pending' && (!companyData?.subscriptionId || companyData?.status === 'pending')) {
+      return (
+        <Routes>
+          <Route path="/subscription" element={<Subscription />} />
+          <Route path="*" element={<Navigate to="/subscription" replace />} />
+        </Routes>
+      );
+    }
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-neutral-50 dark:bg-neutral-900">
+        <div className="text-center p-8 bg-white dark:bg-neutral-800 rounded-2xl shadow-xl max-w-sm">
+          <h2 className="text-2xl font-bold mb-4 text-neutral-900 dark:text-neutral-100">Account Pending</h2>
+          <p className="text-neutral-500 mb-4">Your account or company is waiting for approval. Please check back later.</p>
+          
+          <div className="mb-6 p-4 bg-neutral-100 dark:bg-neutral-700 rounded-xl text-left text-sm text-neutral-600 dark:text-neutral-300">
+            <p><strong>Role:</strong> {userData?.role || 'N/A'}</p>
+            <p><strong>User Status:</strong> {userData?.status || 'N/A'}</p>
+            <p><strong>Comp Status:</strong> {companyData?.status || 'N/A'}</p>
+            <p><strong>Sub Status:</strong> {subscriptionData?.status || 'N/A'}</p>
+          </div>
+
+          <div className="flex flex-col gap-3">
+            <button 
+              onClick={async () => {
+                if (!user) return;
+                const refreshedData = await getUserByUid(user.uid);
+                setUserData(refreshedData);
+                let cData = companyData;
+                let sData = subscriptionData;
+                if (refreshedData?.companyId) {
+                  cData = await getCompanyById(refreshedData.companyId);
+                  setCompanyData(cData);
+                  if (cData?.subscriptionId) {
+                    sData = await getSubscriptionById(cData.subscriptionId);
+                    setSubscriptionData(sData);
+                  }
+                }
+                const isActiveNow = refreshedData?.status === 'active' && cData?.status === 'active' && (!cData?.subscriptionId || sData?.status === 'active');
+                if (isActiveNow) {
+                  alert('✅ Account approved! You can now access the app.');
+                } else {
+                  alert('⏳ Still waiting for approval...');
+                }
+              }}
+              className="w-full bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition font-bold"
+            >
+              Check Approval Status
+            </button>
+            <button onClick={() => auth.signOut()} className="w-full bg-neutral-200 dark:bg-neutral-700 px-6 py-3 rounded-xl hover:opacity-80 transition font-bold text-neutral-800 dark:text-neutral-200">
+              Logout
+            </button>
+            <button 
+              onClick={async () => {
+                if (!auth.currentUser) return;
+                const { updateUserRole, updateUserStatus } = await import('./repos/firestoreUsers');
+                await updateUserRole(auth.currentUser.uid, 'super_admin');
+                await updateUserStatus(auth.currentUser.uid, 'active');
+                window.location.reload();
+              }} 
+              className="w-full bg-accent/10 text-accent px-6 py-3 rounded-xl hover:bg-accent hover:text-white transition-all font-bold"
+            >
+              Force Upgrade to Super Admin (Dev Tool)
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // If super_admin, we can just render the normal app and let them navigate to /super_admin
+  // Or we could force them, but 'renderContent' handles 'super_admin' view appropriately.
 
   return (
     <div className={`flex h-screen w-full bg-neutral-50 dark:bg-neutral-900 overflow-hidden text-neutral-900 dark:text-neutral-100 transition-colors`}>
@@ -890,6 +1052,16 @@ const App: React.FC = () => {
         onSubmit={inputDialog.onSubmit}
         title={inputDialog.title}
         placeholder={inputDialog.placeholder}
+      />
+
+      <InvitePrompt 
+        email={user?.email}
+        onInviteAccepted={() => {
+          // Reload user data when invite is accepted
+          if (user) {
+            getUserByUid(user.uid).then(data => setUserData(data));
+          }
+        }}
       />
 
       <AlertDialog
@@ -960,6 +1132,7 @@ const App: React.FC = () => {
       >
         <div className="w-64 h-full">
           <Sidebar
+            userData={userData}
             onNavigate={handleMobileNav}
             onAddTagRequest={() => setInputDialog({
               isOpen: true,

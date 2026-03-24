@@ -3,11 +3,13 @@ import { createUserWithEmailAndPassword } from "firebase/auth";
 import { auth } from "./firebase";
 import { useNavigate, Link } from "react-router-dom";
 import { addUserToFirestore } from "./repos/firestoreUsers";
+import { createCompany } from "./repos/firestoreCompanies";
 
 const Register = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
+  const role = 'admin';
   const navigate = useNavigate();
 
   // simple SHA-256 encoder to store a hash (client-side only, not truly secure)
@@ -23,13 +25,31 @@ const Register = () => {
       const result = await createUserWithEmailAndPassword(auth, email, password);
       const user = result.user;
       const pwHash = await hashPassword(password);
+
+      let companyId;
+      if (role === 'admin') {
+        companyId = crypto.randomUUID();
+      }
+
       // store user record in Firestore with username and password_hash
-      await addUserToFirestore({ 
-        uid: user.uid, 
+      await addUserToFirestore({
+        uid: user.uid,
         email: user.email,
         username: username || user.email?.split('@')[0] || 'user',
-        password_hash: pwHash
+        password_hash: pwHash,
+        role,
+        companyId
       });
+
+      if (role === 'admin' && companyId) {
+        await createCompany({
+          companyId,
+          companyName: username ? `${username}'s Company` : 'My Company',
+          adminId: user.uid,
+          subscriptionId: ''
+        });
+      }
+
       // use unicode escape to avoid encoding issues
       alert("Account created successfully \u{1F389}");
       navigate("/");

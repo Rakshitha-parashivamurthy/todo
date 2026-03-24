@@ -76,3 +76,6 @@ dist
 
 # mac system file
 .DS_Store
+
+# backend/.gitignore
+serviceAccountKey.json

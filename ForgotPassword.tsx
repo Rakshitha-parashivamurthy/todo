@@ -8,13 +8,19 @@ export default function ForgotPassword() {
   const [status, setStatus] = useState<'idle' | 'sent' | 'error'>('idle');
   const [error, setError] = useState('');
 
+  const [isLoading, setIsLoading] = useState(false);
+
   const handleSubmit = async () => {
+    if (!email || isLoading) return;
+    setIsLoading(true);
     try {
       await sendPasswordResetEmail(auth, email);
       setStatus('sent');
     } catch (e: any) {
       setError(e.message);
       setStatus('error');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -23,23 +29,33 @@ export default function ForgotPassword() {
       <div className="bg-white p-8 rounded-2xl shadow-xl w-96">
         <h2 className="text-2xl font-bold mb-6 text-center">Forgot Password?</h2>
         {status === 'sent' ? (
-          <p className="text-center">Check your inbox for a reset link.</p>
+          <div className="text-center">
+            <p className="text-green-600 font-bold mb-2">Email sent!</p>
+            <p className="text-neutral-600 text-sm">
+              Check your inbox for a reset link. Please wait a minute for it to arrive. <br /><br />
+              <strong>Note:</strong> If you requested multiple links, only the <strong>most recent one</strong> will work.
+            </p>
+          </div>
         ) : (
           <>
             <input
               type="email"
               placeholder="Email"
-              className="w-full p-3 mb-4 border rounded-lg"
+              className="w-full p-3 mb-4 border rounded-lg focus:outline-blue-500"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              disabled={isLoading}
             />
             <button
               onClick={handleSubmit}
-              className="w-full bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700"
+              disabled={isLoading || !email}
+              className={`w-full text-white p-3 rounded-lg transition-all ${
+                isLoading || !email ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
+              }`}
             >
-              Send Reset Email
+              {isLoading ? 'Sending...' : 'Send Reset Email'}
             </button>
-            {status === 'error' && <p className="text-red-600 mt-2">{error}</p>}
+            {status === 'error' && <p className="text-red-500 text-sm mt-3 text-center">{error}</p>}
           </>
         )}
         <p className="text-center text-sm text-neutral-500 mt-4">

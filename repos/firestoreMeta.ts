@@ -126,22 +126,24 @@ export const updateDailyTarget = async (targetId: string, updates: Partial<Daily
 
 export const listenToDailyTargets = (
   userId: string,
+  companyId: string,
   callback: (records: DailyTarget[]) => void
 ) => {
-  const q = query(collection(db, "daily_targets"), where("user_id", "==", userId));
+  const q = query(collection(db, "daily_targets"), where("userId", "==", userId), where("companyId", "==", companyId));
   return onSnapshot(q, (snapshot) => {
-    const data = snapshot.docs.map(doc => ({ target_id: doc.id, ...(doc.data() as any) })) as DailyTarget[];
+    const data = snapshot.docs.map(doc => ({ targetId: doc.id, ...(doc.data() as any) })) as DailyTarget[];
     callback(data);
   });
 };
 
 export const listenToTaskHistory = (
   userId: string,
+  companyId: string,
   callback: (entries: TaskHistoryEntry[]) => void
 ) => {
-  const q = query(collection(db, "task_history"), where("user_id", "==", userId));
+  const q = query(collection(db, "task_history"), where("userId", "==", userId), where("companyId", "==", companyId));
   return onSnapshot(q, (snapshot) => {
-    const data = snapshot.docs.map(doc => ({ history_id: doc.id, ...(doc.data() as any) })) as TaskHistoryEntry[];
+    const data = snapshot.docs.map(doc => ({ historyId: doc.id, ...(doc.data() as any) })) as TaskHistoryEntry[];
     callback(data);
   });
 };

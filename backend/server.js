@@ -17,7 +17,9 @@ app.use(express.json());
 // Download your service account key from:
 // Firebase Console → Project Settings → Service Accounts → Generate new private key
 // Save it as backend/serviceAccountKey.json
-const serviceAccount = require("./serviceAccountKey.json");
+const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+
+serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),

@@ -1,6 +1,5 @@
 import { auth, db } from "./firebase";
 import { doc, deleteDoc } from "firebase/firestore";
-
 import { API_URL } from "./apiConfig";
 
 export interface InviteResponse {
@@ -9,14 +8,18 @@ export interface InviteResponse {
   message: string;
 }
 
-// ✅ INVITE USER (NOW USES BACKEND → EMAIL WILL BE SENT)
+// ✅ INVITE USER (BACKEND → EMAIL)
 export const inviteUserToCompany = async (
   companyId: string,
   email: string
 ): Promise<InviteResponse> => {
   try {
-    if (!auth.currentUser) {
+    if (!auth.currentUser?.uid) {
       throw new Error("User not authenticated");
+    }
+
+    if (!companyId || !email) {
+      throw new Error("Company ID and email are required");
     }
 
     const response = await fetch(`${API_URL}/users/invite`, {
@@ -31,11 +34,12 @@ export const inviteUserToCompany = async (
       }),
     });
 
-    const data = await response.json();
-
     if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
       throw new Error(data.error || "Failed to send invite");
     }
+
+    const data = await response.json();
 
     return {
       success: true,
@@ -48,7 +52,7 @@ export const inviteUserToCompany = async (
   }
 };
 
-// ✅ CREATE USER DIRECTLY (BACKEND → FIREBASE AUTH + FIRESTORE)
+// ✅ CREATE USER DIRECTLY
 export const createUserDirectly = async (
   companyId: string,
   email: string,
@@ -56,8 +60,12 @@ export const createUserDirectly = async (
   username?: string
 ): Promise<{ success: boolean; userId: string; message: string }> => {
   try {
-    if (!auth.currentUser) {
+    if (!auth.currentUser?.uid) {
       throw new Error("User not authenticated");
+    }
+
+    if (!companyId || !email) {
+      throw new Error("Company ID and email are required");
     }
 
     const finalPassword = password || "Temp12345!";
@@ -76,11 +84,12 @@ export const createUserDirectly = async (
       }),
     });
 
-    const data = await response.json();
-
     if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
       throw new Error(data.error || "Failed to create user");
     }
+
+    const data = await response.json();
 
     return {
       success: true,
@@ -93,12 +102,15 @@ export const createUserDirectly = async (
   }
 };
 
-// ✅ DELETE USER (CALL BACKEND IF YOU ADD DELETE API LATER)
-// currently Firestore direct delete
+// ✅ DELETE USER (Firestore for now)
 export const deleteUserFromCompany = async (userId: string) => {
   try {
-    if (!auth.currentUser) {
+    if (!auth.currentUser?.uid) {
       throw new Error("User not authenticated");
+    }
+
+    if (!userId) {
+      throw new Error("User ID is required");
     }
 
     await deleteDoc(doc(db, "users", userId));

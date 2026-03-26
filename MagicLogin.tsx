@@ -34,14 +34,26 @@ const MagicLogin: React.FC = () => {
           body: JSON.stringify({ token }),
         });
 
-        const data = await response.json();
+        const contentType = response.headers.get("content-type");
+        const isJson = contentType && contentType.includes("application/json");
 
         if (!response.ok) {
-          throw new Error(data.error || "Failed to verify magic link.");
+          if (isJson) {
+            const data = await response.json();
+            throw new Error(data.error || "Failed to verify magic link.");
+          } else {
+            const text = await response.text();
+            throw new Error(`Server error (${response.status}): ${text.substring(0, 50)}...`);
+          }
         }
 
-        setEmail(data.email);
-        setStatus("ready");
+        if (isJson) {
+          const data = await response.json();
+          setEmail(data.email);
+          setStatus("ready");
+        } else {
+          throw new Error("Invalid response format from server.");
+        }
       } catch (err: any) {
         console.error("Token verification error:", err);
         setError(err.message || "An unexpected error occurred.");
@@ -75,18 +87,23 @@ const MagicLogin: React.FC = () => {
         body: JSON.stringify({ token, password }),
       });
 
-      const data = await response.json();
+      const contentType = response.headers.get("content-type");
+      const isJson = contentType && contentType.includes("application/json");
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to complete setup.");
+        if (isJson) {
+          const data = await response.json();
+          throw new Error(data.error || "Failed to complete setup.");
+        } else {
+          const text = await response.text();
+          throw new Error(`Server error (${response.status}): ${text.substring(0, 50)}...`);
+        }
       }
 
-      // Automatically log the user in using the custom token
+      const data = await response.json();
       await signInWithCustomToken(auth, data.customToken);
-
       setStatus("success");
       
-      // Short delay for user experience
       setTimeout(() => {
         navigate("/"); 
       }, 1500);

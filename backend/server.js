@@ -196,6 +196,57 @@ app.post("/api/users/complete-invite", async (req, res) => {
 });
 
 
+// ── ROUTE: VERIFY INVITE (GET EMAIL/COMPANY) ────────
+app.post("/api/users/verify-invite", async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token) {
+      return res.status(400).json({ error: "Token is required" });
+    }
+
+    const q = query(
+      collection(clientDb, "invites"),
+      where("token", "==", token),
+      where("status", "==", "pending")
+    );
+    const snapshot = await getDocs(q);
+
+    if (snapshot.empty) {
+      return res.status(404).json({ error: "Invalid or expired invite token" });
+    }
+
+    const inviteDoc = snapshot.docs[0];
+    const inviteData = inviteDoc.data();
+
+    // Check expiration if it exists
+    if (inviteData.expiresAt) {
+      const expiresAt = inviteData.expiresAt.toDate ? inviteData.expiresAt.toDate() : new Date(inviteData.expiresAt);
+      if (expiresAt < new Date()) {
+        return res.status(400).json({ error: "Invite link has expired" });
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      email: inviteData.email,
+      companyId: inviteData.companyId,
+    });
+  } catch (error) {
+    console.error("❌ Verify invite error:", error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+
+// ── 404 HANDLER (MUST BE LAST) ───────────────────────
+app.use((req, res) => {
+  res.status(404).json({ 
+    error: "Not Found", 
+    message: `The requested endpoint ${req.method} ${req.originalUrl} does not exist on this server.` 
+  });
+});
+
+
 // ── START SERVER ─────────────────────────
 app.listen(5000, () => {
   console.log("✅ Server running on port 5000");

@@ -1,9 +1,10 @@
 import React from 'react';
 import { signOut } from "firebase/auth";
 import { auth } from "../../firebase";
+import { useNavigate } from 'react-router-dom';
 import {
   Inbox, Calendar, Clock, CheckCircle2,
-  Target, BarChart3, Settings, Tag as TagIcon,
+  Target, BarChart3, Settings,
   Plus, LayoutDashboard, AlertCircle
 } from 'lucide-react';
 import { useStore } from '../../store';
@@ -18,10 +19,8 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ userData, onNavigate, onAddTagRequest }) => {
-  const { activeView, setView, tasks, tags, filterTagId, setFilterTagId } = useStore(); // removed addTag
-
-  // ... (keep rest)
-
+  const { activeView, setView, tasks, tags, filterTagId, setFilterTagId } = useStore();
+  const navigate = useNavigate();
 
   const counts = {
     inbox: tasks.filter(t => !t.completed).length,
@@ -38,22 +37,24 @@ export const Sidebar: React.FC<SidebarProps> = ({ userData, onNavigate, onAddTag
     overdue: tasks.filter(t => !t.completed && isOverdue(t.dueDate)).length,
   };
 
-  const navItems = [
-    { id: 'inbox', label: 'Inbox', icon: Inbox, count: counts.inbox },
-    { id: 'today', label: 'Today', icon: Calendar, count: counts.today },
-    { id: 'upcoming', label: 'Upcoming', icon: Clock, count: counts.upcoming },
-    { id: 'overdue', label: 'Overdue', icon: AlertCircle, count: counts.overdue, color: 'text-rose-500' },
-    { id: 'completed', label: 'Completed', icon: CheckCircle2 },
-  ];
+  const navItems = userData?.role === 'super_admin'
+    ? [{ id: 'super_admin', label: 'Admin Dashboard', icon: LayoutDashboard }]
+    : [
+      { id: 'inbox', label: 'Inbox', icon: Inbox, count: counts.inbox },
+      { id: 'today', label: 'Today', icon: Calendar, count: counts.today },
+      { id: 'upcoming', label: 'Upcoming', icon: Clock, count: counts.upcoming },
+      { id: 'overdue', label: 'Overdue', icon: AlertCircle, count: counts.overdue, color: 'text-rose-500' },
+      { id: 'completed', label: 'Completed', icon: CheckCircle2 },
+    ];
 
-const tools = [
-  { id: 'focus', label: 'Focus Mode', icon: Target },
-  { id: 'insights', label: 'Insights', icon: BarChart3 },
-  ...(userData?.role === 'admin' ? [{ id: 'subscription', label: 'Subscription', icon: LayoutDashboard }] : []),
-  ...(userData?.role === 'admin' ? [{ id: 'manage_users', label: 'Manage Users', icon: LayoutDashboard }] : []),
-  ...(userData?.role === 'super_admin' ? [{ id: 'super_admin', label: 'Admin Dashboard', icon: LayoutDashboard }] : []),
-  { id: 'settings', label: 'Settings', icon: Settings },
-];
+  const tools = [
+    ...(userData?.role !== 'super_admin' ? [{ id: 'focus', label: 'Focus Mode', icon: Target }] : []),
+    ...(userData?.role !== 'super_admin' ? [{ id: 'insights', label: 'Insights', icon: BarChart3 }] : []),
+    ...(userData?.role === 'admin' && userData?.role !== 'super_admin' ? [{ id: 'subscription', label: 'Subscription', icon: LayoutDashboard }] : []),
+    ...(userData?.role === 'admin' && userData?.role !== 'super_admin' ? [{ id: 'manage_users', label: 'Manage Users', icon: LayoutDashboard }] : []),
+    ...(userData?.role === 'super_admin' ? [{ id: 'super_admin', label: 'Admin Dashboard', icon: LayoutDashboard }] : []),
+    { id: 'settings', label: 'Settings', icon: Settings },
+  ];
 
   const handleNavClick = (view: string) => {
     setView(view as View);
@@ -103,34 +104,36 @@ const tools = [
           ))}
         </nav>
 
-        <nav className="mt-10 space-y-1.5">
-          <div className="flex items-center justify-between px-3 mb-4">
-            <p className="text-[10px] uppercase font-black text-neutral-400 dark:text-neutral-500 tracking-[0.2em]">Tags</p>
-          </div>
-          {tags.map(tag => (
+        {userData?.role !== 'super_admin' && (
+          <nav className="mt-10 space-y-1.5">
+            <div className="flex items-center justify-between px-3 mb-4">
+              <p className="text-[10px] uppercase font-black text-neutral-400 dark:text-neutral-500 tracking-[0.2em]">Tags</p>
+            </div>
+            {tags.map(tag => (
+              <button
+                key={tag.id}
+                onClick={() => handleTagClick(tag.id)}
+                className={`w-full group flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm transition-all duration-200 ${filterTagId === tag.id
+                  ? 'bg-accent-50 dark:bg-accent/10 text-accent font-bold'
+                  : 'text-neutral-500 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-800/50 hover:text-neutral-900 dark:hover:text-white font-medium'
+                  }`}
+              >
+                <span className={`w-2.5 h-2.5 rounded-full shadow-sm transition-transform ${filterTagId === tag.id ? 'scale-125' : 'group-hover:scale-110'}`} style={{ backgroundColor: tag.color }}></span>
+                {tag.name}
+                {filterTagId === tag.id && (
+                  <span className="ml-auto w-1 h-1 rounded-full bg-accent" />
+                )}
+              </button>
+            ))}
             <button
-              key={tag.id}
-              onClick={() => handleTagClick(tag.id)}
-              className={`w-full group flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm transition-all duration-200 ${filterTagId === tag.id
-                ? 'bg-accent-50 dark:bg-accent/10 text-accent font-bold'
-                : 'text-neutral-500 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-800/50 hover:text-neutral-900 dark:hover:text-white font-medium'
-                }`}
+              onClick={onAddTagRequest}
+              className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm text-neutral-400 hover:text-accent hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors font-medium mt-2"
             >
-              <span className={`w-2.5 h-2.5 rounded-full shadow-sm transition-transform ${filterTagId === tag.id ? 'scale-125' : 'group-hover:scale-110'}`} style={{ backgroundColor: tag.color }}></span>
-              {tag.name}
-              {filterTagId === tag.id && (
-                <span className="ml-auto w-1 h-1 rounded-full bg-accent" />
-              )}
+              <Plus size={16} />
+              New Tag
             </button>
-          ))}
-          <button
-            onClick={onAddTagRequest}
-            className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm text-neutral-400 hover:text-accent hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors font-medium mt-2"
-          >
-            <Plus size={16} />
-            New Tag
-          </button>
-        </nav>
+          </nav>
+        )}
       </div>
 
       <div className="mt-auto p-6 space-y-1.5 border-t border-neutral-100 dark:border-neutral-800">
@@ -148,7 +151,10 @@ const tools = [
           </button>
         ))}
         <button
-          onClick={() => signOut(auth)}
+          onClick={async () => {
+            await signOut(auth);
+            navigate('/login');
+          }}
           className="w-full flex items-center gap-3 px-3.5 py-2.5 mt-4 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all font-medium"
         >
           Logout

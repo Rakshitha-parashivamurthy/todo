@@ -52,48 +52,49 @@ const Register = () => {
 
       // use unicode escape to avoid encoding issues
       alert("Account created successfully \u{1F389}");
-      navigate("/");
+      navigate("/subscription");
     } catch (error: any) {
       alert(error.message);
     }
   };
 
   return (
-    <div className="h-screen flex items-center justify-center bg-gradient-to-br from-purple-500 to-blue-500">
-      <div className="bg-white p-8 rounded-2xl shadow-xl w-96">
-        <h2 className="text-2xl font-bold mb-6 text-center">Create Account</h2>
+    <div className="h-screen flex items-center justify-center bg-gradient-to-br from-purple-600 via-blue-500 to-indigo-600">
+      <div className="glass p-8 rounded-3xl shadow-2xl w-96 text-white">
+        <h2 className="text-3xl font-bold mb-2 text-center">Create Account</h2>
+        <p className="text-center text-white/70 mb-6">Join us today</p>
 
         <input
           type="text"
           placeholder="Username"
-          className="w-full p-3 mb-4 border rounded-lg"
+          className="w-full p-3 mb-4 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-white/30"
           onChange={(e) => setUsername(e.target.value)}
         />
 
         <input
           type="email"
           placeholder="Email"
-          className="w-full p-3 mb-4 border rounded-lg"
+          className="w-full p-3 mb-4 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-white/30"
           onChange={(e) => setEmail(e.target.value)}
         />
 
         <input
           type="password"
           placeholder="Password"
-          className="w-full p-3 mb-6 border rounded-lg"
+          className="w-full p-3 mb-6 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-white/30"
           onChange={(e) => setPassword(e.target.value)}
         />
 
         <button
           onClick={handleRegister}
-          className="w-full bg-purple-600 text-white p-3 rounded-lg hover:bg-purple-700"
+          className="w-full bg-white text-purple-600 font-semibold p-3 rounded-lg hover:bg-white/90 transition shadow-lg"
         >
           Register
         </button>
 
-        <p className="text-center text-sm text-neutral-500 mt-4">
+        <p className="text-center text-sm text-white/70 mt-4">
           Already have an account?{' '}
-          <Link to="/login" className="text-purple-600 hover:underline">
+          <Link to="/login" className="text-white hover:text-white/80 font-semibold transition">
             Login
           </Link>
         </p>

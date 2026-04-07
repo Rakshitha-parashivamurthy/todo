@@ -1,7 +1,7 @@
 import Login from "./Login.tsx";
 import ForgotPassword from "./ForgotPassword";
 import { signOut } from "firebase/auth";
-import React, { useEffect, useMemo, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { AnimatePresence, motion, Reorder } from 'framer-motion';
 import { Sidebar } from './components/layout/Sidebar';
 import { TaskItem } from './components/task/TaskItem';
@@ -37,7 +37,7 @@ import ManageUsers from "./components/features/ManageUsers";
 import InvitePrompt from "./components/ui/InvitePrompt";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { auth } from "./firebase";
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 
 // Sound utility with lazy singleton AudioContext (created only on user gesture)
 let audioCtx: AudioContext | null = null;
@@ -100,69 +100,124 @@ const App: React.FC = () => {
   // 🔐 HARDCODED SUPER ADMIN
   const HARDCODED_SUPERADMIN_EMAIL = 'superadmin@todo.app';
 
+  const navigate = useNavigate();
   const [user, setUser] = useState<User | null>(null);
   const [userData, setUserData] = useState<any>(null);
   const [companyData, setCompanyData] = useState<any>(null);
   const [subscriptionData, setSubscriptionData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  // Note: MagicLogin route interceptor is down below all hooks to prevent Rules of Hooks violations
+  const loadUserData = useCallback(async (currentUser: User | null) => {
+    setUser(currentUser);
+    if (!currentUser) {
+      setUserData(null);
+      setCompanyData(null);
+      setSubscriptionData(null);
+      useStore.getState().setAuthData(null, null, null, null, null);
+      setLoading(false);
+      return;
+    }
 
+    updateUserLastLogin(currentUser.uid).catch(console.error);
+    let data = await getUserByUid(currentUser.uid);
+
+    if (currentUser.email === HARDCODED_SUPERADMIN_EMAIL) {
+      if (!data || data.role !== 'super_admin' || data.status !== 'active') {
+        const { updateUserRole, updateUserStatus } = await import('./repos/firestoreUsers');
+        await updateUserRole(currentUser.uid, 'super_admin');
+        await updateUserStatus(currentUser.uid, 'active');
+        data = await getUserByUid(currentUser.uid);
+        console.log('✅ Superadmin credentials applied');
+      }
+    }
+
+    setUserData(data);
+
+    let cData = null;
+    let subData = null;
+
+    if (data?.companyId) {
+      cData = await getCompanyById(data.companyId);
+      setCompanyData(cData);
+
+      if (cData?.subscriptionId) {
+        subData = await getSubscriptionById(cData.subscriptionId);
+        setSubscriptionData(subData);
+      } else {
+        setSubscriptionData(null);
+      }
+    } else {
+      setCompanyData(null);
+      setSubscriptionData(null);
+    }
+
+    if (data) {
+      useStore.getState().setAuthData(data.companyId || null, data.role || null, data.status || null, cData?.status || null, subData?.status || null);
+    }
+    setLoading(false);
+  }, []);
+
+  const refreshAuthData = async () => {
+    await loadUserData(auth.currentUser);
+  };
+
+  // Note: MagicLogin route interceptor is down below all hooks to prevent Rules of Hooks violations
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
-      // Update last login and fetch user data when user authenticates
-      if (currentUser) {
-        updateUserLastLogin(currentUser.uid).catch(console.error);
-        let data = await getUserByUid(currentUser.uid);
-        
-        // Check if this is the hardcoded super admin email
-        if (currentUser.email === HARDCODED_SUPERADMIN_EMAIL) {
-          // Ensure hardcoded super admin has correct role and status
-          if (!data || data.role !== 'super_admin' || data.status !== 'active') {
-            const { updateUserRole, updateUserStatus } = await import('./repos/firestoreUsers');
-            await updateUserRole(currentUser.uid, 'super_admin');
-            await updateUserStatus(currentUser.uid, 'active');
-            // Refresh user data after update
-            data = await getUserByUid(currentUser.uid);
-            console.log('✅ Superadmin credentials applied');
-          }
-        }
-        
-        setUserData(data);
-        
-        let cData = null;
-        let subData = null;
-
-        if (data?.companyId) {
-          cData = await getCompanyById(data.companyId);
-          setCompanyData(cData);
-
-          if (cData?.subscriptionId) {
-            subData = await getSubscriptionById(cData.subscriptionId);
-            setSubscriptionData(subData);
-          } else {
-            setSubscriptionData(null);
-          }
-        } else {
-          setCompanyData(null);
-          setSubscriptionData(null);
-        }
-
-        if (data) {
-          useStore.getState().setAuthData(data.companyId || null, data.role || null, data.status || null, cData?.status || null, subData?.status || null);
-        }
-      } else {
-        setUserData(null);
-        setCompanyData(null);
-        setSubscriptionData(null);
-        useStore.getState().setAuthData(null, null, null, null, null);
-      }
-      setLoading(false);
+      await loadUserData(currentUser);
     });
     return () => unsubscribe();
-  }, []);
+  }, [loadUserData]);
+
+  // 🔄 POLLING: Auto-refresh subscription status while waiting for approval
+  useEffect(() => {
+    if (!user || !userData?.companyId) return;
+
+    const checkApprovalStatus = async () => {
+      try {
+        const updatedCompany = await getCompanyById(userData.companyId);
+        const isSuperAdminUser = userData?.role === 'super_admin';
+        
+        // Check if approval has been granted
+        if (!isSuperAdminUser && updatedCompany?.status === 'active' && updatedCompany?.subscriptionId) {
+          const updatedSub = await getSubscriptionById(updatedCompany.subscriptionId);
+          
+          if (updatedSub?.status === 'active') {
+            console.log('✅ Approval detected! Updating state to render approved app.');
+            setCompanyData(updatedCompany);
+            setSubscriptionData(updatedSub);
+            return;
+          }
+        }
+        
+        setCompanyData(updatedCompany);
+        if (updatedCompany?.subscriptionId) {
+          const updatedSub = await getSubscriptionById(updatedCompany.subscriptionId);
+          setSubscriptionData(updatedSub);
+        }
+      } catch (error) {
+        console.error('Error checking approval status:', error);
+      }
+    };
+
+    // Check immediately on mount
+    checkApprovalStatus();
+
+    // Then check every 3 seconds
+    const interval = setInterval(checkApprovalStatus, 3000);
+
+    return () => clearInterval(interval);
+  }, [user, userData?.companyId, userData?.role]);
+
+  useEffect(() => {
+    const isSuperAdmin = userData?.role === 'super_admin';
+    const hasActiveSubscription = companyData?.status === 'active' && subscriptionData?.status === 'active';
+
+    if (user && !isSuperAdmin && hasActiveSubscription && location.pathname === '/subscription') {
+      navigate('/', { replace: true });
+    }
+  }, [user, userData?.role, companyData?.status, subscriptionData?.status, location.pathname, navigate]);
 
   // Initialize AudioContext on first user gesture
   useEffect(() => {
@@ -241,6 +296,13 @@ const App: React.FC = () => {
     searchQuery, setSearchQuery, filterTagId, setFilterTagId, updateTag, deleteTag,
     addTag, focusState, tickFocusTimer, setFocusState
   } = useStore();
+
+  // Auto-redirect super admin to super admin dashboard
+  useEffect(() => {
+    if (userData?.role === 'super_admin' && activeView !== 'super_admin') {
+      setView('super_admin');
+    }
+  }, [userData?.role, activeView, setView]);
 
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth >= 1024);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -659,6 +721,8 @@ const App: React.FC = () => {
             </div>
           </section>
 
+          {userData?.role !== 'super_admin' && (
+            <>
           <section className="bg-white dark:bg-neutral-800 rounded-[2.5rem] border border-neutral-100 dark:border-neutral-700 p-8 shadow-sm">
             <h3 className="text-[10px] font-black text-neutral-400 uppercase tracking-[0.2em] mb-8">Momentum Goal</h3>
             <div className="p-5 bg-neutral-50 dark:bg-neutral-900/50 rounded-2xl">
@@ -726,6 +790,8 @@ const App: React.FC = () => {
               </button>
             </div>
           </section>
+            </>
+          )}
 
           <section className="bg-white dark:bg-neutral-800 rounded-[2.5rem] border border-neutral-100 dark:border-neutral-700 p-8 shadow-sm">
             <h3 className="text-[10px] font-black text-neutral-400 uppercase tracking-[0.2em] mb-8">Support</h3>
@@ -959,73 +1025,26 @@ const App: React.FC = () => {
     companyData?.status === 'active' && 
     (subscriptionData?.status === 'active' || !companyData?.subscriptionId);
 
-  if (!isSuperAdmin && !isFullyActive) {
-    if (userData?.role === 'admin' && userData?.status === 'pending' && (!companyData?.subscriptionId || companyData?.status === 'pending')) {
-      return (
-        <Routes>
-          <Route path="/subscription" element={<Subscription />} />
-          <Route path="*" element={<Navigate to="/subscription" replace />} />
-        </Routes>
-      );
-    }
-    return (
-      <div className="flex h-screen w-full items-center justify-center bg-neutral-50 dark:bg-neutral-900">
-        <div className="text-center p-8 bg-white dark:bg-neutral-800 rounded-2xl shadow-xl max-w-sm">
-          <h2 className="text-2xl font-bold mb-4 text-neutral-900 dark:text-neutral-100">Account Pending</h2>
-          <p className="text-neutral-500 mb-4">Your account or company is waiting for approval. Please check back later.</p>
-          
-          <div className="mb-6 p-4 bg-neutral-100 dark:bg-neutral-700 rounded-xl text-left text-sm text-neutral-600 dark:text-neutral-300">
-            <p><strong>Role:</strong> {userData?.role || 'N/A'}</p>
-            <p><strong>User Status:</strong> {userData?.status || 'N/A'}</p>
-            <p><strong>Comp Status:</strong> {companyData?.status || 'N/A'}</p>
-            <p><strong>Sub Status:</strong> {subscriptionData?.status || 'N/A'}</p>
-          </div>
+  const needsSubscription = !isSuperAdmin && (!companyData?.subscriptionId || subscriptionData?.status !== 'active');
 
-          <div className="flex flex-col gap-3">
-            <button 
-              onClick={async () => {
-                if (!user) return;
-                const refreshedData = await getUserByUid(user.uid);
-                setUserData(refreshedData);
-                let cData = companyData;
-                let sData = subscriptionData;
-                if (refreshedData?.companyId) {
-                  cData = await getCompanyById(refreshedData.companyId);
-                  setCompanyData(cData);
-                  if (cData?.subscriptionId) {
-                    sData = await getSubscriptionById(cData.subscriptionId);
-                    setSubscriptionData(sData);
-                  }
-                }
-                const isActiveNow = refreshedData?.status === 'active' && cData?.status === 'active' && (!cData?.subscriptionId || sData?.status === 'active');
-                if (isActiveNow) {
-                  alert('✅ Account approved! You can now access the app.');
-                } else {
-                  alert('⏳ Still waiting for approval...');
-                }
-              }}
-              className="w-full bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition font-bold"
-            >
-              Check Approval Status
-            </button>
-            <button onClick={() => auth.signOut()} className="w-full bg-neutral-200 dark:bg-neutral-700 px-6 py-3 rounded-xl hover:opacity-80 transition font-bold text-neutral-800 dark:text-neutral-200">
-              Logout
-            </button>
-            <button 
-              onClick={async () => {
-                if (!auth.currentUser) return;
-                const { updateUserRole, updateUserStatus } = await import('./repos/firestoreUsers');
-                await updateUserRole(auth.currentUser.uid, 'super_admin');
-                await updateUserStatus(auth.currentUser.uid, 'active');
-                window.location.reload();
-              }} 
-              className="w-full bg-accent/10 text-accent px-6 py-3 rounded-xl hover:bg-accent hover:text-white transition-all font-bold"
-            >
-              Force Upgrade to Super Admin (Dev Tool)
-            </button>
-          </div>
-        </div>
+  // Don't show subscription page while loading user data for authenticated users
+  if (loading && user) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent"></div>
       </div>
+    );
+  }
+
+  if (needsSubscription) {
+    return (
+      <Routes>
+        <Route path="/subscription" element={<Subscription refreshAuth={refreshAuthData} />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="*" element={<Navigate to="/subscription" replace />} />
+      </Routes>
     );
   }
 

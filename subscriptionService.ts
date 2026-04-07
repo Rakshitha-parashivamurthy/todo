@@ -1,5 +1,5 @@
 import { createSubscription } from './repos/firestoreSubscriptions';
-import { updateCompanyStatus } from './repos/firestoreCompanies';
+import { updateCompanyStatus, updateCompanySubscriptionId } from './repos/firestoreCompanies';
 
 export const simulatePayment = async (planName: string, companyId: string) => {
   return new Promise<void>((resolve, reject) => {
@@ -14,9 +14,10 @@ export const simulatePayment = async (planName: string, companyId: string) => {
           planName,
           price: planName === 'Basic' ? 9.99 : planName === 'Pro' ? 29.99 : 99.99,
           paymentMethod: 'credit_card_dummy',
-        }); // default status is pending_approval inside createSubscription
+        });
 
-        // Update company status to pending_approval
+        // Attach the subscription ID to the company and mark pending approval
+        await updateCompanySubscriptionId(companyId, subscriptionId);
         await updateCompanyStatus(companyId, 'pending_approval');
         
         resolve();

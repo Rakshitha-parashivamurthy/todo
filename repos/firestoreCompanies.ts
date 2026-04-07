@@ -43,6 +43,16 @@ export const updateCompanyStatus = async (companyId: string, status: 'pending' |
   }
 };
 
+export const updateCompanySubscriptionId = async (companyId: string, subscriptionId: string) => {
+  const companyRef = doc(db, "companies", companyId);
+  try {
+    await updateDoc(companyRef, { subscriptionId });
+    console.log("✅ Company subscriptionId updated:", companyId, subscriptionId);
+  } catch (error) {
+    console.error("❌ Error updating company subscriptionId:", error);
+  }
+};
+
 export const getCompaniesByAdmin = async (adminId: string) => {
   const q = query(collection(db, "companies"), where("adminId", "==", adminId));
   try {
@@ -69,6 +79,20 @@ export const getPendingCompanies = async () => {
     return companies;
   } catch (error) {
     console.error("Error getting pending companies:", error);
+    return [];
+  }
+};
+
+export const getAllCompanies = async () => {
+  try {
+    const querySnapshot = await getDocs(collection(db, "companies"));
+    const companies: any[] = [];
+    querySnapshot.forEach((doc) => {
+      companies.push({ companyId: doc.id, ...doc.data() });
+    });
+    return companies;
+  } catch (error) {
+    console.error("Error getting all companies:", error);
     return [];
   }
 };

@@ -12,7 +12,7 @@
     --accent-color-700: #4338ca;
   }
   
-  body {
+ body {
     @apply font-sans;
   }
 }
@@ -33,6 +33,21 @@
 }
 .dark ::-webkit-scrollbar-thumb {
   background: #374151;
+}
+
+/* Glass morphism effect */
+.glass {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.glass-container {
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 /* Animation helpers */

@@ -2,9 +2,11 @@ const express = require("express");
 const cors = require("cors");
 const admin = require("firebase-admin");
 const { Resend } = require("resend");
+const path = require("path");
+const fs = require("fs");
 require("dotenv").config({ path: require("path").resolve(__dirname, "../.env") });
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 const { db: clientDb } = require("./firebase");
 const {
@@ -24,7 +26,20 @@ app.use(cors());
 app.use(express.json());
 
 // ── Firebase Admin Init ──────────────────────────────
-const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+const serviceAccountPath = path.resolve(__dirname, "./serviceAccountKey.json");
+let serviceAccount;
+
+if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+  // If env var exists, use it
+  serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+} else if (fs.existsSync(serviceAccountPath)) {
+  // Fallback: read from file
+  serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, "utf8"));
+} else {
+  console.error("❌ ERROR: Firebase service account not found. Set FIREBASE_SERVICE_ACCOUNT env var or place serviceAccountKey.json in backend/");
+  process.exit(1);
+}
+
 serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, "\n");
 
 admin.initializeApp({
@@ -67,37 +82,40 @@ const inviteLink = `${frontendUrl}/magic-login?token=${token}`;
 
     // ✅ Send Email via Resend
     try {
-      await resend.emails.send({
-        from: "onboarding@resend.dev",
-        to: email,
-        subject: "You've been invited!",
-        html: `
-          <div style="font-family: sans-serif; padding: 20px;">
-            <h2 style="color: #6366f1;">Welcome to ToDoS!</h2>
-            <p>You have been invited to join a company workspace.</p>
+      if (resend) {
+        await resend.emails.send({
+          from: "onboarding@resend.dev",
+          to: email,
+          subject: "You've been invited!",
+          html: `
+            <div style="font-family: sans-serif; padding: 20px;">
+              <h2 style="color: #6366f1;">Welcome to ToDoS!</h2>
+              <p>You have been invited to join a company workspace.</p>
 
-            <a href="${inviteLink}" 
-              style="
-                display:inline-block;
-                margin-top:10px;
-                padding:10px 20px;
-                background:#6366f1;
-                color:white;
-                text-decoration:none;
-                border-radius:5px;
-                font-weight:bold;
-              ">
-              Accept Invitation
-            </a>
+              <a href="${inviteLink}" 
+                style="
+                  display:inline-block;
+                  margin-top:10px;
+                  padding:10px 20px;
+                  background:#6366f1;
+                  color:white;
+                  text-decoration:none;
+                  border-radius:5px;
+                  font-weight:bold;
+                ">
+                Accept Invitation
+              </a>
 
-            <p style="margin-top:20px; font-size:12px; color:gray;">
-              This link will expire in 30 minutes.
-            </p>
-          </div>
-        `,
-      });
-
-      console.log(`✅ Email sent to ${email}`);
+              <p style="margin-top:20px; font-size:12px; color:gray;">
+                This link will expire in 30 minutes.
+              </p>
+            </div>
+          `,
+        });
+        console.log(`✅ Email sent to ${email}`);
+      } else {
+        console.warn("⚠️ Resend API key not configured. Email not sent. Invite link:", inviteLink);
+      }
     } catch (err) {
       console.error("❌ Email failed:", err.message);
     }

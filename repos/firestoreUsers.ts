@@ -108,3 +108,17 @@ export const hasSuperAdmin = async () => {
     return false;
   }
 };
+
+export const getAllUsers = async () => {
+  try {
+    const querySnapshot = await getDocs(collection(db, "users"));
+    const users: any[] = [];
+    querySnapshot.forEach((doc) => {
+      users.push({ uid: doc.id, ...doc.data() });
+    });
+    return users;
+  } catch (error) {
+    console.error("Error getting all users:", error);
+    return [];
+  }
+};

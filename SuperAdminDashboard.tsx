@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { getAllCompanies, updateCompanyStatus } from './companyService';
-import { getSubscriptionsByCompany, updateSubscriptionStatus } from './repos/firestoreSubscriptions';
-import { getAllUsers, updateUserStatus } from './repos/firestoreUsers';
+import { getAllCompanies, updateCompanyStatus, deleteCompany } from './companyService';
+import { getSubscriptionsByCompany, updateSubscriptionStatus, deleteSubscription } from './repos/firestoreSubscriptions';
+import { getAllUsers, updateUserStatus, deleteUser } from './repos/firestoreUsers';
 
 interface Company {
   companyId: string;
@@ -96,6 +96,44 @@ const SuperAdminDashboard = () => {
     }
   };
 
+  const deleteCompanyData = async (company: Company) => {
+    if (!confirm(`Are you sure you want to delete company "${company.companyName}"? This action cannot be undone and will also delete all associated subscriptions.`)) {
+      return;
+    }
+
+    try {
+      // Delete associated subscriptions first
+      const subs = await getSubscriptionsByCompany(company.companyId);
+      if (subs && subs.length > 0) {
+        for (const sub of subs) {
+          await deleteSubscription(sub.subscriptionId);
+        }
+      }
+
+      await deleteCompany(company.companyId);
+      alert('Company and associated subscriptions deleted successfully.');
+      fetchData();
+    } catch (error) {
+      console.error('Error deleting company', error);
+      alert('Error deleting company.');
+    }
+  };
+
+  const deleteUserData = async (user: UserInfo) => {
+    if (!confirm(`Are you sure you want to delete user "${user.username || user.email}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      await deleteUser(user.uid);
+      alert('User deleted successfully.');
+      fetchData();
+    } catch (error) {
+      console.error('Error deleting user', error);
+      alert('Error deleting user.');
+    }
+  };
+
   return (
     <div className="p-8 pb-32 max-w-6xl mx-auto dark:text-white">
       <header className="mb-8">
@@ -129,6 +167,12 @@ const SuperAdminDashboard = () => {
                 >
                   Approve
                 </button>
+                <button
+                  className="px-3 py-2 rounded-lg bg-red-500 text-white text-sm font-semibold hover:bg-red-600 transition"
+                  onClick={() => deleteCompanyData(company)}
+                >
+                  Delete
+                </button>
               </div>
             </div>
           ))}
@@ -155,6 +199,7 @@ const SuperAdminDashboard = () => {
                 <th className="px-4 py-3 text-slate-900 dark:text-white font-semibold">Role</th>
                 <th className="px-4 py-3 text-slate-900 dark:text-white font-semibold">Status</th>
                 <th className="px-4 py-3 text-slate-900 dark:text-white font-semibold">Company ID</th>
+                <th className="px-4 py-3 text-slate-900 dark:text-white font-semibold">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -165,10 +210,18 @@ const SuperAdminDashboard = () => {
                   <td className="px-4 py-3 text-slate-900 dark:text-white capitalize">{user.role || 'user'}</td>
                   <td className="px-4 py-3 text-slate-900 dark:text-white capitalize">{user.status || 'unknown'}</td>
                   <td className="px-4 py-3 text-slate-900 dark:text-white">{user.companyId || '-'}</td>
+                  <td className="px-4 py-3">
+                    <button
+                      className="px-3 py-1 rounded bg-red-500 text-white text-xs font-semibold hover:bg-red-600 transition"
+                      onClick={() => deleteUserData(user)}
+                    >
+                      Delete
+                    </button>
+                  </td>
                 </tr>
               ))}
               {users.length === 0 && (
-                <tr><td colSpan={5} className="px-4 py-6 text-center text-slate-500 dark:text-slate-400">No users found.</td></tr>
+                <tr><td colSpan={6} className="px-4 py-6 text-center text-slate-500 dark:text-slate-400">No users found.</td></tr>
               )}
             </tbody>
           </table>

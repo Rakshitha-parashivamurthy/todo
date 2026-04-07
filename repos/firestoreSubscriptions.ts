@@ -1,4 +1,4 @@
-import { doc, setDoc, updateDoc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
+import { doc, setDoc, updateDoc, getDoc, collection, query, where, getDocs, deleteDoc } from "firebase/firestore";
 import { db } from "../firebase";
 
 export const createSubscription = async (subscription: { subscriptionId: string; companyId: string; planName: string; price: number; paymentMethod: string }) => {
@@ -60,5 +60,16 @@ export const getSubscriptionsByCompany = async (companyId: string) => {
   } catch (error) {
     console.error("Error getting subscriptions by company:", error);
     return [];
+  }
+};
+
+export const deleteSubscription = async (subscriptionId: string) => {
+  const subRef = doc(db, "subscriptions", subscriptionId);
+  try {
+    await deleteDoc(subRef);
+    console.log("✅ Subscription deleted:", subscriptionId);
+  } catch (error) {
+    console.error("❌ Error deleting subscription:", error);
+    throw error;
   }
 };

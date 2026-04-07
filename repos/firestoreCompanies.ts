@@ -1,4 +1,4 @@
-import { doc, setDoc, updateDoc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
+import { doc, setDoc, updateDoc, getDoc, collection, query, where, getDocs, deleteDoc } from "firebase/firestore";
 import { db } from "../firebase";
 
 export const createCompany = async (company: { companyId: string; companyName: string; adminId: string; subscriptionId: string }) => {
@@ -94,5 +94,16 @@ export const getAllCompanies = async () => {
   } catch (error) {
     console.error("Error getting all companies:", error);
     return [];
+  }
+};
+
+export const deleteCompany = async (companyId: string) => {
+  const companyRef = doc(db, "companies", companyId);
+  try {
+    await deleteDoc(companyRef);
+    console.log("✅ Company deleted:", companyId);
+  } catch (error) {
+    console.error("❌ Error deleting company:", error);
+    throw error;
   }
 };

@@ -1,4 +1,4 @@
-import { doc, setDoc, updateDoc, getDoc, collection, getDocs, query, where } from "firebase/firestore";
+import { doc, setDoc, updateDoc, getDoc, collection, getDocs, query, where, deleteDoc } from "firebase/firestore";
 import { db } from "../firebase";
 
 type Role = 'super_admin' | 'admin' | 'user';
@@ -120,5 +120,16 @@ export const getAllUsers = async () => {
   } catch (error) {
     console.error("Error getting all users:", error);
     return [];
+  }
+};
+
+export const deleteUser = async (uid: string) => {
+  const userRef = doc(db, "users", uid);
+  try {
+    await deleteDoc(userRef);
+    console.log("✅ User deleted:", uid);
+  } catch (error) {
+    console.error("❌ Error deleting user:", error);
+    throw error;
   }
 };
